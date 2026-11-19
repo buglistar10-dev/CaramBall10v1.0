@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="ko"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>분리각 카메라</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+/* VOICE: 당구장 옆에 세워 둔 도구. 짧고 분명하게
+   IDEA: 당구대 위에 분필로 긋는 겨냥선
+   PICTURE: 카메라 화면 그 자체 + 그 위에 그린 수구 길과 분리선
+   COLOUR and TYPE: 대대 블루 천, 노랑 공(4두께 선), 빨강 1적구 / IBM Plex Sans KR
+   LAYOUT: 화면이 맨 위, 그 아래 단계 안내 · 버튼 · 각도 · 읽은 값 */
+:root{color-scheme:light dark;--bg:light-dark(#eef2f8,#08111f);--card:light-dark(#fff,#111e35);--ink:light-dark(#0d1a2e,#eaf0fa);--mute:light-dark(#55657d,#9fb0c8);--line:light-dark(#d3dbe8,#22345a);--felt:#1d4f9e;--y:#f5c400;--r:#e0302a}
+:root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+[hidden]{display:none!important}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 "IBM Plex Sans KR",system-ui,sans-serif;overflow-x:clip}
+header{background:var(--felt);color:#fff;padding:12px max(4vw,14px);display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+h1{margin:0;font-size:20px;line-height:1.1}
+header span{font-size:13px;opacity:.85}
+#stage{position:relative;background:#06101f;display:flex;justify-content:center}
+#cv{display:block;touch-action:none}
+.empty{color:#dfe8f7;padding:40px 20px;text-align:center;min-height:46vh;display:flex;flex-direction:column;justify-content:center;gap:14px;align-items:center;background:radial-gradient(circle at 50% 40%,#2a64bd,#123a7a 70%)}
+.empty p{margin:0;max-width:30em}
+.wrap{padding:12px max(4vw,14px) 32px;max-width:900px;margin:0 auto;display:grid;gap:12px}
+.step{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+.step b{display:block;font-size:17px}
+.step small{color:var(--mute);font-size:13px}
+.row{display:flex;flex-wrap:wrap;gap:8px}
+.btn,button{font:inherit;font-size:15px;min-height:44px;padding:0 14px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--ink);display:inline-flex;align-items:center;cursor:pointer}
+.btn.main,button.main{background:var(--y);border-color:var(--y);color:#1a1400;font-weight:700}
+button:focus-visible,.btn:focus-within,input:focus-visible{outline:3px solid var(--y);outline-offset:2px}
+button[aria-pressed=true]{background:var(--felt);border-color:var(--felt);color:#fff}
+input[type=file]{position:absolute;opacity:0;width:1px;height:1px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px;display:grid;gap:10px}
+.card h2{margin:0;font-size:15px;color:var(--mute);font-weight:600}
+.chips button{padding:0 12px}
+.cust{display:flex;align-items:center;gap:8px}
+.cust input{font:inherit;font-size:16px;width:5.5em;min-height:44px;padding:0 10px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink)}
+.scroll{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{padding:7px 8px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+th:first-child,td:first-child{text-align:left}
+th{color:var(--mute);font-weight:600;font-size:13px}
+tr.on td{background:light-dark(#fff6cc,#3a3205);font-weight:700}
+.kv{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:15px}
+.kv b{font-size:17px}
+.note{font-size:13px;color:var(--mute);margin:0}
+#msg{color:#fff;background:var(--r);font-size:15px;margin:0;padding:10px 14px;border-radius:10px}
+#msg:empty{display:none}
+@media(max-width:600px){table{font-size:13px}}
+</style></head><body>
+<header><h1>분리각 카메라</h1><span>수구 길에서 60°(또는 정한 각도)로 꺾이는 분리선을 당구대 위에 그려요</span></header>
+
+<div id="stage">
+  <div class="empty" id="empty">
+    <p><b style="font-size:19px">당구대를 비춰 주세요</b></p>
+    <p>폰을 고정하고 실시간 카메라를 쓰거나, 사진을 찍어 그 위에 그려요. 코너 4개를 찍으면 원근을 바로잡아 진짜 당구대 위 각도로 그려요.</p>
+    <div class="row" style="justify-content:center">
+      <label class="btn main">사진 찍기<input type="file" accept="image/*" capture="environment" class="pick"></label>
+      <button type="button" class="live">실시간 카메라</button>
+      <label class="btn">앨범에서<input type="file" accept="image/*" class="pick"></label>
+    </div>
+  </div>
+  <canvas id="cv" hidden></canvas>
+  <video id="vid" playsinline muted hidden></video>
+</div>
+
+<div class="wrap">
+  <p id="msg" role="alert"></p>
+  <div class="step"><b id="ins">사진을 찍거나 카메라를 켜세요</b><small id="sub">점은 끌어서 다듬을 수 있어요. 끄는 동안 확대경이 나와요.</small></div>
+  <div class="row" id="tools" hidden>
+    <label class="btn">새 사진<input type="file" accept="image/*" capture="environment" class="pick"></label>
+    <button type="button" class="live" id="liveBtn">실시간 카메라</button>
+    <button type="button" id="undo">되돌리기</button>
+    <button type="button" id="cal">코너 없이</button>
+    <button type="button" id="clear">모두 지우기</button>
+  </div>
+
+  <div class="card">
+    <h2>각도</h2>
+    <div class="row" role="group" aria-label="각도 기준">
+      <button type="button" id="mEff">실효 분리각</button>
+      <button type="button" id="mGeo">기하 분리각</button>
+    </div>
+    <div class="row chips" id="chips"></div>
+    <div class="cust"><label for="ang">직접</label><input id="ang" type="number" inputmode="decimal" min="1" max="89" step="0.5"><span>°</span><button type="button" id="useC">이 각도로</button></div>
+    <div class="row">
+      <button type="button" id="multi">모든 두께 겹쳐 보기</button>
+      <button type="button" id="side">분리 쪽 바꾸기</button>
+      <button type="button" id="aim">겨냥: 1쿠션 쪽 가장자리</button>
+    </div>
+    <p class="note" id="angNote"></p>
+  </div>
+
+  <div class="card" id="read">
+    <h2>읽은 값</h2>
+    <div id="readBody"><p class="note">코너 4개와 수구 · 1적구를 찍으면 장 차이와 출발 − 1쿠션이 나와요.</p></div>
+  </div>
+
+  <p class="note">정확하게 쓰는 법: 코너는 천과 쿠션이 만나는 안쪽 모서리를 찍어요. 공은 비스듬히 찍힐수록 중심이 실제보다 멀리 보이니, 공이 천에 닿는 쪽(아래쪽)으로 살짝 내려 찍으면 더 맞아요. 분리선은 지침대로 1적구 중심을 지나게 그려요.</p>
+</div>
+
+<script>
+{
+const $=id=>document.getElementById(id);
+const cv=$('cv'),ctx=cv.getContext('2d'),stage=$('stage'),vid=$('vid');
+const R=0.0865;               // 공 반지름 (칸)
+const TH=['4','3','2.5','2','1.5','1'];
+const EFF={'4':60,'3':53,'2.5':46,'2':42.5,'1.5':35.5,'1':28.5};
+const geo=t=>90-Math.asin(1-t/8)*180/Math.PI;
+const COL={'4':'#f5c400','3':'#ff8a3d','2.5':'#ff5fa2','2':'#6fdcff','1.5':'#8dff6a','1':'#c9a6ff','c':'#ffffff'};
+const T4=[[0,0],[8,0],[8,4],[0,4]];
+const CN=['① 장0 · 단0 — 1쿠션 쪽 코너 (1쿠션 장쿠션)','② 장8 · 단0 — 같은 장쿠션의 반대쪽 끝','③ 장8 · 단4 — 맞은편 장쿠션','④ 장0 · 단4 — 맞은편 장쿠션'];
+// S표 (축A → 장 차이), 0.5 단위 + 벽꿍 큰 플러스
+const ST=[[-4,6.3],[-3.5,5.7],[-3,5.1],[-2.5,4.5],[-2,4],[-1.5,3.5],[-1,3.1],[-0.5,2.7],[0,2.3],[0.5,2],[1,1.7],[1.5,1.4],[2,1.1],[2.5,.8],[3,.5],[3.5,.3],[4,0],[5,-.4],[6,-.75],[7,-1.1],[8,-1.4]];
+const Sinv=d=>{if(d>ST[0][1]||d<ST[ST.length-1][1])return null;for(let i=0;i<ST.length-1;i++){const[a1,d1]=ST[i],[a2,d2]=ST[i+1];if(d<=d1&&d>=d2)return a1+(d1-d)/(d1-d2)*(a2-a1)}return null};
+
+let S={mode:'eff',sel:'4',custom:60,multi:false,flip:false,edge:true};
+try{Object.assign(S,JSON.parse(localStorage.getItem('sepang')||'{}'))}catch(e){}
+const save=()=>{try{localStorage.setItem('sepang',JSON.stringify(S))}catch(e){}};
+let src=null,P={c:[],cue:null,obj:null},noCal=false,drag=null,fit=1,Ht=null,Hi=null,cal=false,stream=null;
+
+const ang=t=>t==='c'?+S.custom:(S.mode==='geo'?geo(+t):EFF[t]);
+const nm=t=>t==='c'?'직접':t+'두께';
+
+function solve(A,b){const n=b.length;for(let i=0;i<n;i++){let m=i;for(let k=i+1;k<n;k++)if(Math.abs(A[k][i])>Math.abs(A[m][i]))m=k;[A[i],A[m]]=[A[m],A[i]];[b[i],b[m]]=[b[m],b[i]];for(let k=i+1;k<n;k++){const f=A[k][i]/A[i][i];for(let j=i;j<n;j++)A[k][j]-=f*A[i][j];b[k]-=f*b[i]}}const x=Array(n).fill(0);for(let i=n-1;i>=0;i--){let s=b[i];for(let j=i+1;j<n;j++)s-=A[i][j]*x[j];x[i]=s/A[i][i]}return x}
+function homog(a,d){const A=[],b=[];for(let i=0;i<4;i++){const[x,y]=a[i],[u,v]=d[i];A.push([x,y,1,0,0,0,-u*x,-u*y]);b.push(u);A.push([0,0,0,x,y,1,-v*x,-v*y]);b.push(v)}return[...solve(A,b),1]}
+function inv(m){const[a,b,c,d,e,f,g,h,i]=m;const A=e*i-f*h,B=f*g-d*i,C=d*h-e*g,D=c*h-b*i,E=a*i-c*g,F=b*g-a*h,G=b*f-c*e,H=c*d-a*f,I=a*e-b*d,det=a*A+b*B+c*C;return[A/det,D/det,G/det,B/det,E/det,H/det,C/det,F/det,I/det]}
+const ap=(m,p)=>{const w=m[6]*p[0]+m[7]*p[1]+m[8];return[(m[0]*p[0]+m[1]*p[1]+m[2])/w,(m[3]*p[0]+m[4]*p[1]+m[5])/w]};
+const Wk=p=>cal?ap(Hi,p):p, Im=p=>cal?ap(Ht,p):p;
+const rot=(u,d)=>{const r=d*Math.PI/180,c=Math.cos(r),s=Math.sin(r);return[u[0]*c-u[1]*s,u[0]*s+u[1]*c]};
+function clip(o,v,X,Y){let t0=-1e9,t1=1e9;for(const[k,M]of[[0,X],[1,Y]]){if(Math.abs(v[k])<1e-9){if(o[k]<0||o[k]>M)return null;continue}let a=-o[k]/v[k],b=(M-o[k])/v[k];if(a>b)[a,b]=[b,a];t0=Math.max(t0,a);t1=Math.min(t1,b)}return t0<=t1?[t0,t1]:null}
+const box=()=>cal?[8,4]:[src.w,src.h];
+
+function step(){if(!noCal&&P.c.length<4)return'c';if(!P.cue)return'cue';if(!P.obj)return'obj';return'done'}
+
+// 기하 계산 (작업 공간: 코너가 있으면 당구대 칸, 없으면 화면 픽셀)
+function base(){
+  if(!P.cue||!P.obj)return null;
+  const c=Wk(P.cue),o=Wk(P.obj);let u=[o[0]-c[0],o[1]-c[1]],L=Math.hypot(...u);if(L<1e-6)return null;u=[u[0]/L,u[1]/L];
+  let a=o;
+  if(cal&&S.edge){let n=[-u[1],u[0]];if(n[1]>0)n=[-n[0],-n[1]];a=[o[0]+n[0]*R,o[1]+n[1]*R];u=[a[0]-c[0],a[1]-c[1]];L=Math.hypot(...u);u=[u[0]/L,u[1]/L]}
+  return{c,o,a,u};
+}
+function sepDir(b,t){const d=ang(t),v1=rot(b.u,d),v2=rot(b.u,-d);let v;if(cal)v=v1[1]<v2[1]?v1:v2;else v=v1;if(S.flip)v=v===v1?v2:v1;return v}
+function readLine(o,v){if(!cal||Math.abs(v[1])<1e-6)return null;const x0=o[0]+(-o[1]/v[1])*v[0],x4=o[0]+((4-o[1])/v[1])*v[0];return{x0,x4,d:x4-x0,f:10+5*x4,k:10*x0}}
+
+function draw(){
+  if(!src){cv.hidden=true;$('empty').hidden=false;return}
+  cv.hidden=false;$('empty').hidden=true;
+  const cw=stage.clientWidth,maxH=Math.min(innerHeight*.68,1000),s=Math.min(cw/src.w,maxH/src.h);
+  const w=Math.round(src.w*s),h=Math.round(src.h*s),dpr=devicePixelRatio||1;
+  if(cv.width!==Math.round(w*dpr)||cv.height!==Math.round(h*dpr)){cv.width=Math.round(w*dpr);cv.height=Math.round(h*dpr);cv.style.width=w+'px';cv.style.height=h+'px'}
+  fit=s;ctx.setTransform(dpr,0,0,dpr,0,0);ctx.drawImage(src.el,0,0,w,h);
+  ctx.setTransform(dpr*s,0,0,dpr*s,0,0);const px=1/s;
+  const seg=(p,q,col,lw,dash)=>{ctx.beginPath();ctx.setLineDash(dash?dash.map(x=>x*px):[]);ctx.strokeStyle=col;ctx.lineWidth=lw*px;ctx.moveTo(...p);ctx.lineTo(...q);ctx.stroke();ctx.setLineDash([])};
+  const label=(p,txt,col)=>{ctx.font=`700 ${13*px}px "IBM Plex Sans KR",sans-serif`;const tw=ctx.measureText(txt).width;let x=Math.min(Math.max(p[0]-tw/2,4*px),src.w-tw-4*px),y=Math.min(Math.max(p[1],16*px),src.h-6*px);ctx.fillStyle='rgba(0,0,0,.7)';ctx.fillRect(x-4*px,y-14*px,tw+8*px,19*px);ctx.fillStyle=col;ctx.fillText(txt,x,y)};
+  // 당구대 격자
+  if(cal){for(let i=0;i<=8;i++)seg(Im([i,0]),Im([i,4]),'rgba(255,255,255,'+(i%8?'.22':'.7')+')',i%8?1:2);for(let j=0;j<=4;j++)seg(Im([0,j]),Im([8,j]),'rgba(255,255,255,'+(j%4?'.22':'.7')+')',j%4?1:2);for(let i=1;i<8;i++){const p=Im([i,0]);label([p[0],p[1]+18*px],String(i),'#cfe0ff')}}
+  // 코너 점
+  P.c.forEach((p,i)=>{ctx.beginPath();ctx.arc(...p,7*px,0,7);ctx.fillStyle='#f5c400';ctx.fill();ctx.lineWidth=2*px;ctx.strokeStyle='#000';ctx.stroke();label([p[0],p[1]-12*px],String(i+1),'#f5c400')});
+  const b=base();
+  if(b){
+    const [X,Y]=box();
+    // 수구 길
+    const cu=clip(b.c,b.u,X,Y);
+    seg(Im(b.c),Im(b.a),'#ffffff',2.5);
+    if(cu&&cu[1]>0){const L=Math.hypot(b.a[0]-b.c[0],b.a[1]-b.c[1]);seg(Im(b.a),Im([b.c[0]+b.u[0]*cu[1],b.c[1]+b.u[1]*cu[1]]),'rgba(255,255,255,.75)',1.5,[7,6]);void L}
+    // 분리선
+    const list=S.multi?[...TH,...(S.sel==='c'?['c']:[])]:[S.sel];
+    for(const t of list){
+      const v=sepDir(b,t),r=clip(b.o,v,X,Y);if(!r)continue;const on=t===S.sel,col=COL[t];
+      const pf=[b.o[0]+v[0]*r[1],b.o[1]+v[1]*r[1]],pb=[b.o[0]+v[0]*r[0],b.o[1]+v[1]*r[0]];
+      ctx.shadowColor='rgba(0,0,0,.6)';ctx.shadowBlur=4*px;
+      if(r[1]>0)seg(Im(b.o),Im(pf),col,on?4:2);
+      if(r[0]<0)seg(Im(b.o),Im(pb),col,on?2:1.2,[10,7]);
+      ctx.shadowBlur=0;
+      if(r[1]>0){const e=Im(pf),q=Im(b.o),k=.86;label([q[0]+(e[0]-q[0])*k,q[1]+(e[1]-q[1])*k],`${nm(t)} ${(+ang(t).toFixed(1))}°`,col)}
+    }
+    // 각도 호
+    const vs=sepDir(b,S.sel),d=ang(S.sel),sg=Math.sign(b.u[0]*vs[1]-b.u[1]*vs[0])||1,rad=cal?.45:60*px;
+    ctx.beginPath();for(let i=0;i<=24;i++){const q=Im((()=>{const w=rot(b.u,sg*d*i/24);return[b.o[0]+w[0]*rad,b.o[1]+w[1]*rad]})());i?ctx.lineTo(...q):ctx.moveTo(...q)}
+    ctx.strokeStyle=COL[S.sel];ctx.lineWidth=2.5*px;ctx.stroke();
+    const mid=rot(b.u,sg*d/2);label(Im([b.o[0]+mid[0]*rad*1.6,b.o[1]+mid[1]*rad*1.6]),(+d.toFixed(1))+'°',COL[S.sel]);
+  }
+  // 공 표시
+  const ball=(p,col,txt)=>{if(!p)return;ctx.beginPath();ctx.arc(...p,11*px,0,7);ctx.lineWidth=3*px;ctx.strokeStyle='#000';ctx.stroke();ctx.lineWidth=2*px;ctx.strokeStyle=col;ctx.stroke();seg([p[0]-5*px,p[1]],[p[0]+5*px,p[1]],col,1.5);seg([p[0],p[1]-5*px],[p[0],p[1]+5*px],col,1.5);label([p[0],p[1]-16*px],txt,col)};
+  ball(P.cue,'#ffffff','수구');ball(P.obj,'#ff4a3d','1적구');
+  // 확대경
+  if(drag){const p=getP(drag);if(p){ctx.setTransform(dpr,0,0,dpr,0,0);const Z=3,r=62,cx=p[0]*s<w/2?w-r-10:r+10,cy=r+10,sw=2*r/(s*Z);ctx.save();ctx.beginPath();ctx.arc(cx,cy,r,0,7);ctx.clip();ctx.drawImage(src.el,p[0]-sw/2,p[1]-sw/2,sw,sw,cx-r,cy-r,2*r,2*r);ctx.restore();ctx.beginPath();ctx.arc(cx,cy,r,0,7);ctx.lineWidth=3;ctx.strokeStyle='#f5c400';ctx.stroke();ctx.lineWidth=1.5;ctx.strokeStyle='#fff';ctx.beginPath();ctx.moveTo(cx-12,cy);ctx.lineTo(cx+12,cy);ctx.moveTo(cx,cy-12);ctx.lineTo(cx,cy+12);ctx.stroke()}}
+}
+
+function getP(d){return d.k==='c'?P.c[d.i]:P[d.k]}
+function setP(d,p){if(d.k==='c')P.c[d.i]=p;else P[d.k]=p}
+const f1=x=>(Math.round(x*10)/10).toFixed(1);
+
+function ui(){
+  const st=step();
+  $('tools').hidden=!src;
+  $('ins').textContent=!src?'사진을 찍거나 카메라를 켜세요':st==='c'?'코너 '+CN[P.c.length]:st==='cue'?'수구 중심을 찍으세요':st==='obj'?'1적구 중심을 찍으세요':'다 됐어요. 점을 끌어 다듬으세요';
+  $('sub').textContent=st==='c'?'코너를 찍으면 원근을 바로잡아 진짜 각도로 그려요. 위에서 똑바로 내려다본 화면이면 "코너 없이"도 돼요.':'점은 끌어서 다듬을 수 있어요. 끄는 동안 확대경이 나와요.';
+  $('cal').textContent=noCal?'코너 쓰기':'코너 없이';
+  $('liveBtn').textContent=src&&src.live?'화면 멈추기':'실시간 카메라';
+  $('mEff').setAttribute('aria-pressed',S.mode==='eff');$('mGeo').setAttribute('aria-pressed',S.mode==='geo');
+  $('chips').innerHTML=TH.map(t=>`<button type="button" data-t="${t}" aria-pressed="${S.sel===t}">${t}두께 ${+ang(t).toFixed(1)}°</button>`).join('')+`<button type="button" data-t="c" aria-pressed="${S.sel==='c'}">직접 ${+(+S.custom).toFixed(1)}°</button>`;
+  $('multi').setAttribute('aria-pressed',S.multi);$('side').setAttribute('aria-pressed',S.flip);
+  $('aim').textContent=S.edge?'겨냥: 1쿠션 쪽 가장자리':'겨냥: 1적구 중심';$('aim').hidden=!cal;
+  $('angNote').textContent=(S.mode==='eff'?'실효 분리각: 지침의 "축A에서 빼기"를 각도로 바꾼 값 (60 − 빼기 × 7°).':'기하 분리각: 90° − 컷 각, sin 컷 = 1 − 두께/8.')+(cal?' 분리 쪽은 1쿠션(단0) 쪽이 기본이에요.':' 코너 없이 쓰면 화면 위 각도예요.');
+  // 읽은 값
+  const b=base();
+  if(!b||!cal){$('readBody').innerHTML=`<p class="note">${!cal&&b?'화면 각도로만 그렸어요. 코너 4개를 찍으면 장 차이와 출발 − 1쿠션이 나와요.':'코너 4개와 수구 · 1적구를 찍으면 장 차이와 출발 − 1쿠션이 나와요.'}</p>`;return}
+  const rows=[...TH,...(S.sel==='c'?['c']:[])].map(t=>{const r=readLine(b.o,sepDir(b,t));if(!r)return'';const out=r.x4>8||r.x0<0;return`<tr class="${t===S.sel?'on':''}"><td>${nm(t)}</td><td>${+ang(t).toFixed(1)}°</td><td>${f1(r.d)}칸</td><td>${f1(r.f)} − ${f1(r.k)}</td><td>${f1(r.f-r.k)}${out?' *':''}</td></tr>`}).join('');
+  const r4=readLine(b.o,sepDir(b,'4')),ax=r4&&S.mode==='eff'?Sinv(r4.d):null;
+  $('readBody').innerHTML=`<div class="kv"><span>1적구 <b>장 ${f1(b.o[0])} · 단 ${f1(b.o[1])}</b></span><span>수구 <b>장 ${f1(b.c[0])} · 단 ${f1(b.c[1])}</b></span>${ax!=null?`<span>4두께 장 차이로 읽은 축A <b>${ax>0?'+':''}${f1(ax)}</b></span>`:''}</div>
+  <div class="scroll"><table><thead><tr><th>두께</th><th>각도</th><th>장 차이</th><th>출발 − 1쿠션</th><th>기준값</th></tr></thead><tbody>${rows}</tbody></table></div>
+  <p class="note">출발 = 10 + 5 × 출발 장 (단4 쪽), 1쿠션 = 10 × 1쿠션 장 (단0 쪽). 코너 · 벽꿍 · 30 넘는 값 보정은 하기 전 값이에요. * 는 출발이 코너(50)를 넘거나 1쿠션이 0 아래로 가는 라인.</p>`;
+}
+
+function update(){cal=!noCal&&P.c.length===4;if(cal){Ht=homog(T4,P.c);Hi=inv(Ht)}if(!src||!src.live)draw();ui()}
+function msg(t){$('msg').textContent=t||'';if(t)$('msg').scrollIntoView({block:'nearest',behavior:'smooth'})}
+
+function rescale(w,h){if(src&&(src.w!==w||src.h!==h)){const k=w/src.w,m=p=>p&&[p[0]*k,p[1]*k];P.c=P.c.map(m);P.cue=m(P.cue);P.obj=m(P.obj)}}
+function stopLive(){if(stream){stream.getTracks().forEach(t=>t.stop());stream=null}}
+function loop(){if(src&&src.live){if(vid.videoWidth&&(vid.videoWidth!==src.w||vid.videoHeight!==src.h)){rescale(vid.videoWidth,vid.videoHeight);src.w=vid.videoWidth;src.h=vid.videoHeight;update()}draw();requestAnimationFrame(loop)}}
+function setStill(el,w,h){const k=Math.min(1,1600/Math.max(w,h)),c=document.createElement('canvas');c.width=Math.round(w*k);c.height=Math.round(h*k);c.getContext('2d').drawImage(el,0,0,c.width,c.height);stopLive();rescale(c.width,c.height);src={el:c,w:c.width,h:c.height,live:false};update()}
+
+document.querySelectorAll('.pick').forEach(inp=>inp.addEventListener('change',e=>{const f=e.target.files&&e.target.files[0];if(!f)return;const im=new Image();im.onload=()=>{setStill(im,im.naturalWidth,im.naturalHeight);URL.revokeObjectURL(im.src);msg('')};im.onerror=()=>msg('사진을 열지 못했어요. 다른 사진으로 해 보세요.');im.src=URL.createObjectURL(f);e.target.value=''}));
+async function startLive(){
+  if(src&&src.live){setStill(vid,vid.videoWidth,vid.videoHeight);return}
+  try{stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1920}},audio:false});vid.srcObject=stream;await vid.play();rescale(vid.videoWidth,vid.videoHeight);src={el:vid,w:vid.videoWidth,h:vid.videoHeight,live:true};msg('');update();loop()}
+  catch(err){stopLive();msg(!window.isSecureContext||!navigator.mediaDevices?'이 화면은 카메라를 쓸 수 없는 주소예요. https 주소로 열어 주세요.':(err&&err.name==='NotAllowedError'?'카메라 권한이 막혔어요. Claude 앱 안에서는 실시간 카메라가 안 되니, 브라우저(크롬 · 사파리)에서 https 주소로 열어 주세요. 여기서는 "사진 찍기"로 쓸 수 있어요.':'카메라를 켜지 못했어요 ('+(err&&err.name||'오류')+'). "사진 찍기"로 써 주세요.'))}
+}
+document.querySelectorAll('.live').forEach(b=>b.addEventListener('click',startLive));
+
+cv.addEventListener('pointerdown',e=>{
+  if(!src)return;const r=cv.getBoundingClientRect(),p=[(e.clientX-r.left)/fit,(e.clientY-r.top)/fit];
+  const all=[...P.c.map((q,i)=>({k:'c',i,q})),...(P.cue?[{k:'cue',q:P.cue}]:[]),...(P.obj?[{k:'obj',q:P.obj}]:[])];
+  let best=null,bd=28/fit;for(const it of all){const d=Math.hypot(it.q[0]-p[0],it.q[1]-p[1]);if(d<bd){bd=d;best=it}}
+  if(!best){const st=step();if(st==='c'){P.c.push(p);best={k:'c',i:P.c.length-1}}else if(st==='cue'){P.cue=p;best={k:'cue'}}else if(st==='obj'){P.obj=p;best={k:'obj'}}else return}
+  drag={k:best.k,i:best.i,last:p};cv.setPointerCapture(e.pointerId);e.preventDefault();update();
+});
+cv.addEventListener('pointermove',e=>{if(!drag)return;const r=cv.getBoundingClientRect(),p=[(e.clientX-r.left)/fit,(e.clientY-r.top)/fit],q=getP(drag);setP(drag,[q[0]+p[0]-drag.last[0],q[1]+p[1]-drag.last[1]]);drag.last=p;update()});
+const end=()=>{if(drag){drag=null;update()}};
+cv.addEventListener('pointerup',end);cv.addEventListener('pointercancel',end);
+
+$('undo').onclick=()=>{if(P.obj)P.obj=null;else if(P.cue)P.cue=null;else P.c.pop();update()};
+$('clear').onclick=()=>{P={c:[],cue:null,obj:null};update()};
+$('cal').onclick=()=>{noCal=!noCal;update()};
+$('mEff').onclick=()=>{S.mode='eff';save();update()};
+$('mGeo').onclick=()=>{S.mode='geo';save();update()};
+$('chips').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;S.sel=b.dataset.t;save();update()});
+$('ang').value=S.custom;
+const useC=()=>{const v=parseFloat($('ang').value);if(!(v>0&&v<90)){msg('각도는 1 ~ 89° 사이로 넣어 주세요.');return}msg('');S.custom=v;S.sel='c';save();update()};
+$('useC').onclick=useC;$('ang').addEventListener('keydown',e=>{if(e.key==='Enter')useC()});
+$('multi').onclick=()=>{S.multi=!S.multi;save();update()};
+$('side').onclick=()=>{S.flip=!S.flip;save();update()};
+$('aim').onclick=()=>{S.edge=!S.edge;save();update()};
+const ro=new ResizeObserver(()=>{if(src&&!src.live)draw()});ro.observe(stage);
+update();
+}
+</script>
+</body></html>
