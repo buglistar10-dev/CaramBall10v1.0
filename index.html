@@ -48,9 +48,19 @@ tr.on td{background:light-dark(#fff6cc,#3a3205);font-weight:700}
 .note{font-size:13px;color:var(--mute);margin:0}
 #msg{color:#fff;background:var(--r);font-size:15px;margin:0;padding:10px 14px;border-radius:10px}
 #msg:empty{display:none}
+.ans{background:var(--card);border:2px solid var(--y);border-radius:14px;padding:14px;display:grid;gap:10px}
+.ans h2{margin:0;font-size:15px;color:var(--mute);font-weight:600}
+.shot{font-size:clamp(26px,7vw,36px);font-weight:700;line-height:1.1}
+.verdict{font-size:16px}.ok{color:#14a44d;font-weight:700}.mid{color:#d98a00;font-weight:700}.bad{color:var(--r);font-weight:700}
+.calc{margin:0;padding:0;list-style:none;display:grid;gap:4px;font-size:15px}
+.calc li{display:flex;justify-content:space-between;gap:12px;border-bottom:1px dashed var(--line);padding:3px 0}
+.calc b{color:light-dark(#0a5cff,#7fb2ff);white-space:nowrap}
+.adj{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.adj button{min-width:44px;justify-content:center;padding:0 10px}
+details summary{cursor:pointer;min-height:36px;display:flex;align-items:center;color:var(--mute);font-weight:600}
 @media(max-width:600px){table{font-size:13px}}
 </style></head><body>
-<header><h1>분리각 카메라</h1><span>수구 길에서 60°(또는 정한 각도)로 꺾이는 분리선을 당구대 위에 그려요</span></header>
+<header><h1>분리각 카메라</h1><span>수구 · 1적구 · 2적구를 찍으면 분리선과 해답, 3쿠션 도착을 그려요</span></header>
 
 <div id="stage">
   <div class="empty" id="empty">
@@ -77,6 +87,15 @@ tr.on td{background:light-dark(#fff6cc,#3a3205);font-weight:700}
     <button type="button" id="clear">모두 지우기</button>
   </div>
 
+  <div class="ans" id="sol">
+    <h2>해답 (뒤돌리기 · 지침 v3.12 B 모델)</h2>
+    <div id="solBody"><p class="note">코너 4개 → 수구 → 1적구 → 2적구를 찍으면 두께 · 상하 · 정회전이 나와요.</p></div>
+    <div class="adj"><span>축A</span><button type="button" id="sMinus">−0.5</button><button type="button" id="sPlus">+0.5</button><span id="sNote" class="note"></span></div>
+    <div class="adj"><span>목표</span><button type="button" id="tAuto">2적구로 자동</button><input id="tIn" type="number" inputmode="decimal" step="0.5" style="font:inherit;font-size:16px;width:5.5em;min-height:44px;padding:0 10px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink)"><button type="button" id="tUse">직접</button></div>
+    <details><summary>두께별 해답 보기</summary><div class="scroll" id="allK"></div></details>
+    <p class="note">예상 값은 재현팩 B 정밀 모델 숫자예요. 2적구 → 목표(3쿠션)는 3쿠션 뒤 반사각이 같다고 본 근사예요.</p>
+  </div>
+
   <div class="card">
     <h2>각도</h2>
     <div class="row" role="group" aria-label="각도 기준">
@@ -93,14 +112,68 @@ tr.on td{background:light-dark(#fff6cc,#3a3205);font-weight:700}
     <p class="note" id="angNote"></p>
   </div>
 
-  <div class="card" id="read">
-    <h2>읽은 값</h2>
+  <details class="card" id="read">
+    <summary>분리선으로 직접 잰 값 (참고)</summary>
     <div id="readBody"><p class="note">코너 4개와 수구 · 1적구를 찍으면 장 차이와 출발 − 1쿠션이 나와요.</p></div>
-  </div>
+  </details>
 
   <p class="note">정확하게 쓰는 법: 코너는 천과 쿠션이 만나는 안쪽 모서리를 찍어요. 공은 비스듬히 찍힐수록 중심이 실제보다 멀리 보이니, 공이 천에 닿는 쪽(아래쪽)으로 살짝 내려 찍으면 더 맞아요. 분리선은 지침대로 1적구 중심을 지나게 그려요.</p>
 </div>
 
+<script>
+// 기홍 볼 시스템 v3.12 해답 계산 (재현팩 bb · d1 · z · bm · ev 그대로 옮김)
+const SV=(()=>{
+const RP=0.0866,FR=0.16;
+const interp=(x,xs,ys)=>{if(x<=xs[0])return ys[0];if(x>=xs[xs.length-1])return ys[ys.length-1];for(let i=0;i<xs.length-1;i++)if(x<=xs[i+1])return ys[i]+(ys[i+1]-ys[i])*(x-xs[i])/(xs[i+1]-xs[i])};
+function startv(px,py,dx,dy){const bx=-dx,by=-dy;const t1=by>0?(4+FR-py)/by:1e9,t2=bx>0?(8+FR-px)/bx:1e9;
+ if(t1<=t2)return Math.min(50,5*(px+bx*t1)+10);const d=Math.max(0,4-(py+by*t2));return d<=2?50+10*d:70+20*(d-2)}
+const SC=[[0,0],[30,3],[35,3.3],[40,3.6],[45,4],[50,4.5],[60,5]];
+function c2p(c){for(let i=0;i<SC.length-1;i++){const[a,p]=SC[i],[b,q]=SC[i+1];if(c<=b)return p+(q-p)*(c-a)/(b-a)}return 5+(c-60)/20}
+function sepDir(C,O,K){const dx=O[0]-C[0],dy=O[1]-C[1],D=Math.hypot(dx,dy),th=Math.atan2(dy,dx);
+ const ph=th+Math.asin((1-K/8)*2*RP/D),u=[Math.cos(ph),Math.sin(ph)];const pr=dx*u[0]+dy*u[1],perp2=dx*dx+dy*dy-pr*pr;
+ const t=pr-Math.sqrt(Math.max(0,4*RP*RP-perp2)),P=[C[0]+u[0]*t,C[1]+u[1]*t];const n=[(O[0]-P[0])/(2*RP),(O[1]-P[1])/(2*RP)],vn=u[0]*n[0]+u[1]*n[1];
+ let v=[u[0]-vn*n[0],u[1]-vn*n[1]];const L=Math.hypot(...v);return{P,v:[v[0]/L,v[1]/L]}}
+function backExact(X,h,S,K){const hy=Math.hypot(2.5,4),E=[X-RP*2.5/hy,h-RP*4/hy];let C=null;
+ for(const d of[2.5,2,1.5,1,0.7]){const c=[E[0]+d,E[1]+S/8*d];if(c[1]>0.1&&c[1]<3.9){C=c;break}}if(!C)return null;
+ const{P,v}=sepDir(C,[X,h],K);if(v[1]>=0)return null;const p1=P[0]+v[0]*(P[1]+FR)/(-v[1]);const val=startv(P[0],P[1],v[0],v[1])-10*p1;
+ return val<0?val:10*c2p(val)}
+const AL={4:1.5,3:1.25,2.5:1.125,2:1,1.5:1,1:1},PT={4:5,3:4,2.5:3.75,2:10/3,1.5:10/3,1:10/3};
+const r05=x=>Math.floor(x*2+.5)/2;
+function arrive(pt,tau){if(pt>=10)return pt+(tau-3)*10/3;const N=2*pt-20,t0=-N/5;return tau<=t0?N+5*tau:(tau-t0)*10/3}
+const HA=[],HV=[6.3,5.7,5.1,4.5,4,3.5,3.1,2.7,2.3,2.0,1.7,1.4,1.1,0.8,0.5,0.3,0];for(let i=0;i<17;i++)HA.push(-4+i*.5);
+const XA=[4,5,5.5,6,6.5,7,7.5,8,8.5,9],XV=[0,-0.37,-0.56,-0.75,-0.92,-1.09,-1.25,-1.4,-1.55,-1.68];
+function span(s){if(s>4)return interp(s,XA,XV);if(s<-4)return interp(s,[-6,-4],[9.3,6.3]);return interp(s,HA,HV)}
+function rawc(x,h,sp){const p1=x-sp*(h+FR)/(4+2*FR);return startv(x,h,p1-x,-FR-h)-10*p1}
+const conv=c=>c<0?c:10*c2p(c);
+const CF={4:[0,2],3:[1,2],2.5:[2,3],2:[2.5,3],1.5:[3.5,3.5],1:[4.5,3.5]};
+const STEP={3:.75,2.5:.625,2:.5,1.5:.42,1:1/3},S4={0:0,1:1,2:1.75,3:2.5,3.5:2.875};
+const slopeB=(V,K)=>K===4?(V>=0?S4[V]:V):V*STEP[K];
+function truthB(X,h,S,K,V,T,wall){if(wall){const p=backExact(X,h,S,K);return p==null?null:arrive(p,(V+T)*AL[K]-1)}
+ const p=backExact(X,h,S-slopeB(V,K),K);return p==null?null:arrive(p,T*AL[K])}
+const cor=v=>v-Math.max(10-v,0)/3;
+const BT={4:2,3:2,2.5:3,2:3,1.5:3.5,1:3.5};
+// 한 두께에서 해답 (계산 줄 포함)
+function tryK(X,h,S,K,TG,wall){
+ const q=CF[K][0]+(K!==4?0.3*Math.max(S-4,0):0);
+ if(wall){const c=rawc(X,h,span(S-q)),V0=conv(c);if(K!==4&&V0>35)return{fail:'기준값 35 넘음',V0};
+  const Vc=cor(V0)-3.3,t=r05(CF[K][1]+(TG-Vc)/PT[K]);const lo=(K===1||K===1.5)?(TG>=35?3.5:0):-3.5;
+  if(!(t>=lo&&t<=7.5))return{fail:'팁 합 '+t+' (범위 밖)',V0,Vc};let V=Math.min(Math.floor(t-2),3);if(t-V>4)V=t-4;
+  return{V,T:t-V,V0,Vc,tip:t,q,sl:0,c}}
+ let best=null;const Vs=(K===1||K===1.5)?[0,1,2,3,3.5]:[0,1,2,3,3.5,-1,-2,-3];
+ for(const V of Vs){const sl=slopeB(V,K),c=rawc(X,h,span(S))+(span(S-q-sl)-span(S))*(5+1.25*h),V0=conv(c);
+  if(K!==4&&V0>35)continue;const Vc=cor(V0),tau=CF[K][1]*AL[K]+(TG-Vc)/(10/3),T=r05(tau/AL[K]);
+  if(!(T>=0&&T<=4))continue;const key=Math.abs(T-BT[K]);if(!best||key<best.key-1e-9)best={key,V,T,V0,Vc,q,sl,c}}
+ return best||{fail:'정회전 0 ~ 4 안에 드는 상하 없음'}}
+function solve(X,h,S,TG,order=[4,2,1.5,1]){const wall=h<=1,tries=[];
+ for(const K of order){const r=tryK(X,h,S,K,TG,wall);r.K=K;tries.push(r);if(r.fail)continue;
+  const v=truthB(X,h,S,K,r.V,r.T,wall);if(v==null){r.fail='정밀값 없음';continue}r.pred=v;return{best:r,tries,wall}}
+ return{best:null,tries,wall}}
+function allK(X,h,S,TG){const wall=h<=1;return[4,3,2.5,2,1.5,1].map(K=>{const r=tryK(X,h,S,K,TG,wall);r.K=K;if(!r.fail){const v=truthB(X,h,S,K,r.V,r.T,wall);if(v==null)r.fail='정밀값 없음';else r.pred=v}return r})}
+return{solve,allK,span,rawc,conv,slopeB,backExact,CF,RP,FR};
+})();
+
+
+</script>
 <script>
 {
 const $=id=>document.getElementById(id);
@@ -119,7 +192,7 @@ const Sinv=d=>{if(d>ST[0][1]||d<ST[ST.length-1][1])return null;for(let i=0;i<ST.
 let S={mode:'eff',sel:'4',custom:60,multi:false,flip:false,edge:true};
 try{Object.assign(S,JSON.parse(localStorage.getItem('sepang')||'{}'))}catch(e){}
 const save=()=>{try{localStorage.setItem('sepang',JSON.stringify(S))}catch(e){}};
-let src=null,P={c:[],cue:null,obj:null},noCal=false,drag=null,fit=1,Ht=null,Hi=null,cal=false,stream=null;
+let src=null,P={c:[],cue:null,obj:null,obj2:null},sol=null,adjS=0,tgAuto=true,tgMan=20,noCal=false,drag=null,fit=1,Ht=null,Hi=null,cal=false,stream=null;
 
 const ang=t=>t==='c'?+S.custom:(S.mode==='geo'?geo(+t):EFF[t]);
 const nm=t=>t==='c'?'직접':t+'두께';
@@ -133,7 +206,7 @@ const rot=(u,d)=>{const r=d*Math.PI/180,c=Math.cos(r),s=Math.sin(r);return[u[0]*
 function clip(o,v,X,Y){let t0=-1e9,t1=1e9;for(const[k,M]of[[0,X],[1,Y]]){if(Math.abs(v[k])<1e-9){if(o[k]<0||o[k]>M)return null;continue}let a=-o[k]/v[k],b=(M-o[k])/v[k];if(a>b)[a,b]=[b,a];t0=Math.max(t0,a);t1=Math.min(t1,b)}return t0<=t1?[t0,t1]:null}
 const box=()=>cal?[8,4]:[src.w,src.h];
 
-function step(){if(!noCal&&P.c.length<4)return'c';if(!P.cue)return'cue';if(!P.obj)return'obj';return'done'}
+function step(){if(!noCal&&P.c.length<4)return'c';if(!P.cue)return'cue';if(!P.obj)return'obj';if(!P.obj2)return'obj2';return'done'}
 
 // 기하 계산 (작업 공간: 코너가 있으면 당구대 칸, 없으면 화면 픽셀)
 function base(){
@@ -145,6 +218,67 @@ function base(){
 }
 function sepDir(b,t){const d=ang(t),v1=rot(b.u,d),v2=rot(b.u,-d);let v;if(cal)v=v1[1]<v2[1]?v1:v2;else v=v1;if(S.flip)v=v===v1?v2:v1;return v}
 function readLine(o,v){if(!cal||Math.abs(v[1])<1e-6)return null;const x0=o[0]+(-o[1]/v[1])*v[0],x4=o[0]+((4-o[1])/v[1])*v[0];return{x0,x4,d:x4-x0,f:10+5*x4,k:10*x0}}
+
+
+// ---------- 해답 ----------
+const fx=(v,d=1)=>(v>0?'+':'')+(+v.toFixed(d));
+const shotName=(K,V,T)=>`${K}두께 · ${V===0?'중단':V>0?'상'+V:'하'+(-V)} · 정${T}`;
+function bounce(p,d){let t=1e9,hx=false,hy=false;const c=[[d[0]>0?(8-p[0])/d[0]:d[0]<0?-p[0]/d[0]:1e9,'x'],[d[1]>0?(4-p[1])/d[1]:d[1]<0?-p[1]/d[1]:1e9,'y']];
+  for(const[tt,k]of c)if(tt>1e-6&&tt<t-1e-9){t=tt;hx=k==='x';hy=k==='y'}else if(tt>1e-6&&Math.abs(tt-t)<1e-9){if(k==='x')hx=true;else hy=true}
+  const q=[p[0]+d[0]*t,p[1]+d[1]*t];return{p:q,d:[hx?-d[0]:d[0],hy?-d[1]:d[1]]}}
+function track(o,p1,x3){const A=[Math.max(p1,0),0],y2=p1>0.02?4*p1/(p1+x3):0,B=[0,y2],C3=[x3,4];let d=[x3,-(4-y2)];const L=Math.hypot(...d);d=[d[0]/L,d[1]/L];
+  const b4=bounce(C3,d),b5=bounce(b4.p,b4.d);return[o,A,B,C3,b4.p,b5.p]}
+function segD(g,a,b){const vx=b[0]-a[0],vy=b[1]-a[1],L=vx*vx+vy*vy;let t=L?((g[0]-a[0])*vx+(g[1]-a[1])*vy)/L:0;t=Math.max(0,Math.min(1,t));return Math.hypot(g[0]-a[0]-vx*t,g[1]-a[1]-vy*t)}
+function hitD(G,pts){return Math.min(segD(G,pts[2],pts[3]),segD(G,pts[3],pts[4]),segD(G,pts[4],pts[5]))}
+function autoT(m,p1){let best=null;const ok=[];for(let T=1;T<=60;T+=0.25){const d=hitD(m.G,track(m.o,p1,T/10));if(!best||d<best.d)best={T,d};if(d<=0.173)ok.push(T)}
+  let T=best.T;if(ok.length){let lo=best.T,hi=best.T;while(ok.includes(lo-0.25))lo-=0.25;while(ok.includes(hi+0.25))hi+=0.25;T=(lo+hi)/2}
+  return{T:Math.round(T*2)/2,d:best.d,ok:ok.length>0}}
+function shotP1(m,r){const sp=SV.span(m.S-r.q-(r.sl||0));return m.o[0]-sp*m.o[1]/4}
+function compute(){
+  if(!cal||!P.cue||!P.obj)return null;
+  const c=ap(Hi,P.cue),o=ap(Hi,P.obj),hy=Math.hypot(2.5,4),E=[o[0]-R*2.5/hy,o[1]-R*4/hy],dx=c[0]-E[0];
+  if(o[0]<0||o[0]>8||o[1]<0||o[1]>4)return{err:'1적구가 당구대 밖으로 읽혀요. 코너 순서를 확인해 주세요.'};
+  if(Math.abs(dx)<0.05)return{err:'수구와 1적구가 장 방향으로 너무 붙어 있어 축A를 못 읽어요.'};
+  const Sraw=8*(c[1]-E[1])/dx,S=Math.max(-4,Math.min(8,Math.round(Sraw*2)/2+adjS));
+  const m={c,o,E,Sraw,S,rev:dx<0,G:P.obj2?ap(Hi,P.obj2):null};
+  let TG=tgMan,auto=null;
+  if(tgAuto){if(!m.G)return{m,need:'2적구'};const p0=o[0]-SV.span(S)*o[1]/4;auto=autoT(m,p0);TG=auto.T}
+  let res=SV.solve(o[0],o[1],S,TG);
+  if(tgAuto&&res.best){const a2=autoT(m,shotP1(m,res.best));if(a2.T!==TG){const r2=SV.solve(o[0],o[1],S,a2.T);if(r2.best){auto=a2;TG=a2.T;res=r2}}}
+  const base4=SV.conv(SV.rawc(o[0],o[1],SV.span(S)));
+  return{m,TG,auto,res,base4,all:SV.allK(o[0],o[1],S,TG)};
+}
+const judge=(v,t)=>{const e=Math.abs(v-t);return e<=2?['ok','득점']:e<3.3?['mid','살짝 빗나감']:['bad','크게 빗나감']};
+function renderSol(){
+  const B=$('solBody');$('sNote').textContent='';
+  if(!sol){B.innerHTML=`<p class="note">${!cal?'코너 4개를 먼저 찍어 주세요 (해답은 코너가 있어야 나와요).':'수구 · 1적구 · 2적구를 찍으면 해답이 나와요.'}</p>`;$('allK').innerHTML='';return}
+  if(sol.err){B.innerHTML=`<p class="note">${sol.err}</p>`;return}
+  const m=sol.m;$('sNote').textContent=`읽은 값 ${fx(m.Sraw)} → ${fx(m.S)}${adjS?` (손으로 ${fx(adjS)})`:''}`;
+  $('tAuto').setAttribute('aria-pressed',tgAuto);
+  if(sol.need){B.innerHTML=`<p class="note">2적구를 찍으면 목표가 정해져요. 목표를 직접 넣어도 돼요.</p>`;return}
+  const r=sol.res.best,o=m.o,h=o[1],wall=sol.res.wall;
+  const tgLine=sol.auto?`목표 ${sol.TG} (2적구${sol.auto.ok?'':` · 가장 가까운 길, ${f1(sol.auto.d)}칸 떨어짐`})`:`목표 ${sol.TG} (직접)`;
+  if(!r){B.innerHTML=`<div class="shot">포기 공</div><p class="verdict">${tgLine}: 4 · 2 · 1.5 · 1두께 모두 안 돼요.</p><ul class="calc">${sol.res.tries.map(t=>`<li><span>${t.K}두께</span><b>${t.fail}</b></li>`).join('')}</ul>`;renderAll();return}
+  const[jc,jt]=judge(r.pred,sol.TG),unit=5+1.25*h,sp0=SV.span(m.S),sp1=SV.span(m.S-r.q-(r.sl||0));
+  const lines=[`<li><span>축A (0.5 단위)</span><b>${fx(m.S)}</b></li>`,
+   `<li><span>S_B(${fx(m.S)}) = 장 차이</span><b>${f1(sp0)}칸</b></li>`,
+   `<li><span>1적구</span><b>장 ${f1(o[0])} · 단 ${f1(h)}${wall?' (벽꿍)':''}</b></li>`,
+   `<li><span>4두께 기준값 = 출발 − 1쿠션</span><b>${f1(sol.base4)}</b></li>`];
+  if(!wall&&(r.K!==4||r.V!==0))lines.push(`<li><span>${r.K}두께 ${r.V===0?'중단':r.V>0?'상'+r.V:'하'+(-r.V)} 기준값 = ${f1(sol.base4)} + (${f1(sp1)} − ${f1(sp0)})칸 × ${f1(unit)}</span><b>${f1(r.c)}${r.c>30?' → 포인트 '+f1(r.V0):''}</b></li>`);
+  if(wall&&r.K!==4)lines.push(`<li><span>${r.K}두께 기준값 (축A ${fx(m.S-r.q)}로 읽기)</span><b>${f1(r.c)}${r.c>30?' → 포인트 '+f1(r.V0):''}</b></li>`);
+  if(r.V0<10)lines.push(`<li><span>코너: 모자람 ${f1(10-r.V0)} × ⅓ 더 빼기</span><b>${f1(wall?r.Vc+3.3:r.Vc)}</b></li>`);
+  if(wall)lines.push(`<li><span>벽꿍 3.3 빼기</span><b>${f1(r.Vc)}</b></li>`);
+  lines.push(wall?`<li><span>팁 합 = ${({4:2,3:2,2.5:3,2:3,1.5:3.5,1:3.5})[r.K]} + (${sol.TG} − ${f1(r.Vc)}) ÷ ${({4:5,3:4,2.5:3.75,2:3.3,1.5:3.3,1:3.3})[r.K]}</span><b>${r.tip} → ${r.V===0?'중단':r.V>0?'상'+r.V:'하'+(-r.V)} · 정${r.T}</b></li>`
+    :`<li><span>정회전 = ${({4:2,2:3,1.5:3.5,1:3.5,3:2,2.5:3})[r.K]} + (${sol.TG} − ${f1(r.Vc)}) ÷ ${({4:5,3:4,2.5:3.75,2:3.3,1.5:3.3,1:3.3})[r.K]}</span><b>정${r.T}</b></li>`);
+  const tried=sol.res.tries.filter(t=>t.fail).map(t=>`${t.K}두께 ${t.fail}`).join(' · ');
+  B.innerHTML=`<div class="shot">${shotName(r.K,r.V,r.T)}</div>
+   <p class="verdict">${tgLine} · 예상 <b>${f1(r.pred)}</b> <span class="${jc}">${jt}</span></p>
+   ${m.rev?'<p class="note" style="color:var(--r)">수구가 1적구보다 장이 낮게 읽혀요. 코너 ①이 1쿠션 쪽 코너인지 확인해 주세요.</p>':''}
+   <ul class="calc">${lines.join('')}</ul>${tried?`<p class="note">못 친 두께: ${tried}</p>`:''}`;
+  renderAll();
+}
+function renderAll(){if(!sol||!sol.all){$('allK').innerHTML='';return}
+  $('allK').innerHTML=`<table><thead><tr><th>두께</th><th>샷</th><th>예상</th><th>판정</th></tr></thead><tbody>${sol.all.map(t=>{if(t.fail)return`<tr><td>${t.K}두께</td><td colspan="3" style="text-align:left">${t.fail}</td></tr>`;const[jc,jt]=judge(t.pred,sol.TG);const on=sol.res.best&&sol.res.best.K===t.K;return`<tr class="${on?'on':''}"><td>${t.K}두께</td><td>${t.V===0?'중단':t.V>0?'상'+t.V:'하'+(-t.V)} · 정${t.T}</td><td>${f1(t.pred)}</td><td class="${jc}">${jt}</td></tr>`}).join('')}</tbody></table>`}
 
 function draw(){
   if(!src){cv.hidden=true;$('empty').hidden=false;return}
@@ -184,9 +318,18 @@ function draw(){
     ctx.strokeStyle=COL[S.sel];ctx.lineWidth=2.5*px;ctx.stroke();
     const mid=rot(b.u,sg*d/2);label(Im([b.o[0]+mid[0]*rad*1.6,b.o[1]+mid[1]*rad*1.6]),(+d.toFixed(1))+'°',COL[S.sel]);
   }
+  // 해답 길과 3쿠션
+  if(cal&&sol&&sol.m&&!sol.err&&!sol.need){
+    const m=sol.m,r=sol.res&&sol.res.best;
+    const tgP=Im([sol.TG/10,4]);ctx.save();ctx.translate(...tgP);ctx.fillStyle='#ffd23d';ctx.strokeStyle='#000';ctx.lineWidth=2*px;ctx.beginPath();for(let i=0;i<10;i++){const a=-Math.PI/2+i*Math.PI/5,rr=(i%2?5:12)*px;ctx.lineTo(Math.cos(a)*rr,Math.sin(a)*rr)}ctx.closePath();ctx.fill();ctx.stroke();ctx.restore();
+    label([tgP[0],tgP[1]-16*px],'목표 '+sol.TG,'#ffd23d');
+    if(r&&r.pred>0){const pts=track(m.o,shotP1(m,r),r.pred/10).map(Im);ctx.beginPath();ctx.setLineDash([12*px,7*px]);ctx.moveTo(...pts[0]);pts.slice(1).forEach(q=>ctx.lineTo(...q));ctx.strokeStyle='#3dffa0';ctx.lineWidth=3*px;ctx.shadowColor='rgba(0,0,0,.7)';ctx.shadowBlur=4*px;ctx.stroke();ctx.shadowBlur=0;ctx.setLineDash([]);
+      const a3=pts[3];ctx.beginPath();ctx.arc(...a3,8*px,0,7);ctx.fillStyle='#3dffa0';ctx.fill();ctx.lineWidth=2*px;ctx.strokeStyle='#000';ctx.stroke();label([a3[0],a3[1]+24*px],'예상 '+f1(r.pred),'#3dffa0');
+      ['1','2','4'].forEach((n,i)=>{const q=pts[[1,2,4][i]];label([q[0],q[1]+(i===2?-12:20)*px],n+'쿠션','#3dffa0')})}
+  }
   // 공 표시
   const ball=(p,col,txt)=>{if(!p)return;ctx.beginPath();ctx.arc(...p,11*px,0,7);ctx.lineWidth=3*px;ctx.strokeStyle='#000';ctx.stroke();ctx.lineWidth=2*px;ctx.strokeStyle=col;ctx.stroke();seg([p[0]-5*px,p[1]],[p[0]+5*px,p[1]],col,1.5);seg([p[0],p[1]-5*px],[p[0],p[1]+5*px],col,1.5);label([p[0],p[1]-16*px],txt,col)};
-  ball(P.cue,'#ffffff','수구');ball(P.obj,'#ff4a3d','1적구');
+  ball(P.cue,'#ffffff','수구');ball(P.obj,'#ff4a3d','1적구');ball(P.obj2,'#ffd23d','2적구');
   // 확대경
   if(drag){const p=getP(drag);if(p){ctx.setTransform(dpr,0,0,dpr,0,0);const Z=3,r=62,cx=p[0]*s<w/2?w-r-10:r+10,cy=r+10,sw=2*r/(s*Z);ctx.save();ctx.beginPath();ctx.arc(cx,cy,r,0,7);ctx.clip();ctx.drawImage(src.el,p[0]-sw/2,p[1]-sw/2,sw,sw,cx-r,cy-r,2*r,2*r);ctx.restore();ctx.beginPath();ctx.arc(cx,cy,r,0,7);ctx.lineWidth=3;ctx.strokeStyle='#f5c400';ctx.stroke();ctx.lineWidth=1.5;ctx.strokeStyle='#fff';ctx.beginPath();ctx.moveTo(cx-12,cy);ctx.lineTo(cx+12,cy);ctx.moveTo(cx,cy-12);ctx.lineTo(cx,cy+12);ctx.stroke()}}
 }
@@ -196,9 +339,9 @@ function setP(d,p){if(d.k==='c')P.c[d.i]=p;else P[d.k]=p}
 const f1=x=>(Math.round(x*10)/10).toFixed(1);
 
 function ui(){
-  const st=step();
+  const st=step();renderSol();
   $('tools').hidden=!src;
-  $('ins').textContent=!src?'사진을 찍거나 카메라를 켜세요':st==='c'?'코너 '+CN[P.c.length]:st==='cue'?'수구 중심을 찍으세요':st==='obj'?'1적구 중심을 찍으세요':'다 됐어요. 점을 끌어 다듬으세요';
+  $('ins').textContent=!src?'사진을 찍거나 카메라를 켜세요':st==='c'?'코너 '+CN[P.c.length]:st==='cue'?'수구 중심을 찍으세요':st==='obj'?'1적구 중심을 찍으세요':st==='obj2'?'2적구 중심을 찍으세요':'다 됐어요. 점을 끌어 다듬으세요';
   $('sub').textContent=st==='c'?'코너를 찍으면 원근을 바로잡아 진짜 각도로 그려요. 위에서 똑바로 내려다본 화면이면 "코너 없이"도 돼요.':'점은 끌어서 다듬을 수 있어요. 끄는 동안 확대경이 나와요.';
   $('cal').textContent=noCal?'코너 쓰기':'코너 없이';
   $('liveBtn').textContent=src&&src.live?'화면 멈추기':'실시간 카메라';
@@ -212,15 +355,15 @@ function ui(){
   if(!b||!cal){$('readBody').innerHTML=`<p class="note">${!cal&&b?'화면 각도로만 그렸어요. 코너 4개를 찍으면 장 차이와 출발 − 1쿠션이 나와요.':'코너 4개와 수구 · 1적구를 찍으면 장 차이와 출발 − 1쿠션이 나와요.'}</p>`;return}
   const rows=[...TH,...(S.sel==='c'?['c']:[])].map(t=>{const r=readLine(b.o,sepDir(b,t));if(!r)return'';const out=r.x4>8||r.x0<0;return`<tr class="${t===S.sel?'on':''}"><td>${nm(t)}</td><td>${+ang(t).toFixed(1)}°</td><td>${f1(r.d)}칸</td><td>${f1(r.f)} − ${f1(r.k)}</td><td>${f1(r.f-r.k)}${out?' *':''}</td></tr>`}).join('');
   const r4=readLine(b.o,sepDir(b,'4')),ax=r4&&S.mode==='eff'?Sinv(r4.d):null;
-  $('readBody').innerHTML=`<div class="kv"><span>1적구 <b>장 ${f1(b.o[0])} · 단 ${f1(b.o[1])}</b></span><span>수구 <b>장 ${f1(b.c[0])} · 단 ${f1(b.c[1])}</b></span>${ax!=null?`<span>4두께 장 차이로 읽은 축A <b>${ax>0?'+':''}${f1(ax)}</b></span>`:''}</div>
+  $('readBody').innerHTML=`<div class="kv"><span>1적구 <b>장 ${f1(b.o[0])} · 단 ${f1(b.o[1])}</b></span><span>수구 <b>장 ${f1(b.c[0])} · 단 ${f1(b.c[1])}</b></span></div>
   <div class="scroll"><table><thead><tr><th>두께</th><th>각도</th><th>장 차이</th><th>출발 − 1쿠션</th><th>기준값</th></tr></thead><tbody>${rows}</tbody></table></div>
-  <p class="note">출발 = 10 + 5 × 출발 장 (단4 쪽), 1쿠션 = 10 × 1쿠션 장 (단0 쪽). 코너 · 벽꿍 · 30 넘는 값 보정은 하기 전 값이에요. * 는 출발이 코너(50)를 넘거나 1쿠션이 0 아래로 가는 라인.</p>`;
+  <p class="note">카메라에 그린 분리선을 그대로 잰 값이라 해답 카드(지침 표 값)와 조금 다를 수 있어요. 출발 = 10 + 5 × 출발 장 (단4 쪽), 1쿠션 = 10 × 1쿠션 장 (단0 쪽). 코너 · 벽꿍 · 30 넘는 값 보정은 하기 전 값이에요. * 는 출발이 코너(50)를 넘거나 1쿠션이 0 아래로 가는 라인.</p>`;
 }
 
-function update(){cal=!noCal&&P.c.length===4;if(cal){Ht=homog(T4,P.c);Hi=inv(Ht)}if(!src||!src.live)draw();ui()}
+function update(){cal=!noCal&&P.c.length===4;if(cal){Ht=homog(T4,P.c);Hi=inv(Ht)}sol=compute();if(!src||!src.live)draw();ui()}
 function msg(t){$('msg').textContent=t||'';if(t)$('msg').scrollIntoView({block:'nearest',behavior:'smooth'})}
 
-function rescale(w,h){if(src&&(src.w!==w||src.h!==h)){const k=w/src.w,m=p=>p&&[p[0]*k,p[1]*k];P.c=P.c.map(m);P.cue=m(P.cue);P.obj=m(P.obj)}}
+function rescale(w,h){if(src&&(src.w!==w||src.h!==h)){const k=w/src.w,m=p=>p&&[p[0]*k,p[1]*k];P.c=P.c.map(m);P.cue=m(P.cue);P.obj=m(P.obj);P.obj2=m(P.obj2)}}
 function stopLive(){if(stream){stream.getTracks().forEach(t=>t.stop());stream=null}}
 function loop(){if(src&&src.live){if(vid.videoWidth&&(vid.videoWidth!==src.w||vid.videoHeight!==src.h)){rescale(vid.videoWidth,vid.videoHeight);src.w=vid.videoWidth;src.h=vid.videoHeight;update()}draw();requestAnimationFrame(loop)}}
 function setStill(el,w,h){const k=Math.min(1,1600/Math.max(w,h)),c=document.createElement('canvas');c.width=Math.round(w*k);c.height=Math.round(h*k);c.getContext('2d').drawImage(el,0,0,c.width,c.height);stopLive();rescale(c.width,c.height);src={el:c,w:c.width,h:c.height,live:false};update()}
@@ -235,17 +378,17 @@ document.querySelectorAll('.live').forEach(b=>b.addEventListener('click',startLi
 
 cv.addEventListener('pointerdown',e=>{
   if(!src)return;const r=cv.getBoundingClientRect(),p=[(e.clientX-r.left)/fit,(e.clientY-r.top)/fit];
-  const all=[...P.c.map((q,i)=>({k:'c',i,q})),...(P.cue?[{k:'cue',q:P.cue}]:[]),...(P.obj?[{k:'obj',q:P.obj}]:[])];
+  const all=[...P.c.map((q,i)=>({k:'c',i,q})),...(P.cue?[{k:'cue',q:P.cue}]:[]),...(P.obj?[{k:'obj',q:P.obj}]:[]),...(P.obj2?[{k:'obj2',q:P.obj2}]:[])];
   let best=null,bd=28/fit;for(const it of all){const d=Math.hypot(it.q[0]-p[0],it.q[1]-p[1]);if(d<bd){bd=d;best=it}}
-  if(!best){const st=step();if(st==='c'){P.c.push(p);best={k:'c',i:P.c.length-1}}else if(st==='cue'){P.cue=p;best={k:'cue'}}else if(st==='obj'){P.obj=p;best={k:'obj'}}else return}
+  if(!best){const st=step();if(st==='c'){P.c.push(p);best={k:'c',i:P.c.length-1}}else if(st==='cue'){P.cue=p;best={k:'cue'}}else if(st==='obj'){P.obj=p;best={k:'obj'}}else if(st==='obj2'){P.obj2=p;best={k:'obj2'}}else return}
   drag={k:best.k,i:best.i,last:p};cv.setPointerCapture(e.pointerId);e.preventDefault();update();
 });
 cv.addEventListener('pointermove',e=>{if(!drag)return;const r=cv.getBoundingClientRect(),p=[(e.clientX-r.left)/fit,(e.clientY-r.top)/fit],q=getP(drag);setP(drag,[q[0]+p[0]-drag.last[0],q[1]+p[1]-drag.last[1]]);drag.last=p;update()});
 const end=()=>{if(drag){drag=null;update()}};
 cv.addEventListener('pointerup',end);cv.addEventListener('pointercancel',end);
 
-$('undo').onclick=()=>{if(P.obj)P.obj=null;else if(P.cue)P.cue=null;else P.c.pop();update()};
-$('clear').onclick=()=>{P={c:[],cue:null,obj:null};update()};
+$('undo').onclick=()=>{if(P.obj2)P.obj2=null;else if(P.obj)P.obj=null;else if(P.cue)P.cue=null;else P.c.pop();update()};
+$('clear').onclick=()=>{P={c:[],cue:null,obj:null,obj2:null};adjS=0;update()};
 $('cal').onclick=()=>{noCal=!noCal;update()};
 $('mEff').onclick=()=>{S.mode='eff';save();update()};
 $('mGeo').onclick=()=>{S.mode='geo';save();update()};
@@ -256,6 +399,10 @@ $('useC').onclick=useC;$('ang').addEventListener('keydown',e=>{if(e.key==='Enter
 $('multi').onclick=()=>{S.multi=!S.multi;save();update()};
 $('side').onclick=()=>{S.flip=!S.flip;save();update()};
 $('aim').onclick=()=>{S.edge=!S.edge;save();update()};
+$('sMinus').onclick=()=>{adjS-=0.5;update()};$('sPlus').onclick=()=>{adjS+=0.5;update()};
+$('tAuto').onclick=()=>{tgAuto=true;update()};
+$('tUse').onclick=()=>{const v=parseFloat($('tIn').value);if(!isFinite(v)){msg('목표 숫자를 넣어 주세요.');return}msg('');tgMan=v;tgAuto=false;update()};
+$('tIn').value=tgMan;
 const ro=new ResizeObserver(()=>{if(src&&!src.live)draw()});ro.observe(stage);
 update();
 }
