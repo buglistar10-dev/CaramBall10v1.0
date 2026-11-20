@@ -94,7 +94,7 @@ details summary{cursor:pointer;min-height:36px;display:flex;align-items:center;c
     <div class="adj"><span>수구위치</span><button type="button" id="sMinus">−0.5</button><button type="button" id="sPlus">+0.5</button><span id="sNote" class="note"></span></div>
     <div class="adj"><span>목표</span><button type="button" id="tAuto">2적구로 자동</button><input id="tIn" type="number" inputmode="decimal" step="0.05" style="font:inherit;font-size:16px;width:5.5em;min-height:44px;padding:0 10px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink)"><span>p</span><button type="button" id="tUse">직접</button></div>
     <details><summary>두께별 계산 보기</summary><div class="scroll" id="allK"></div></details>
-    <p class="note">숫자는 원리로만 계산해요 (재현팩 값은 넣지 않아요). 2적구 → 목표(3쿠션)는 3쿠션 뒤 반사각이 같다고 본 근사예요. 배치도의 초록 점선도 근사예요.</p>
+    <p class="note">숫자는 원리로만 계산해요 (재현팩 값은 넣지 않아요). 2적구 → 목표는 파이브 앤 하프 3 → 4쿠션 트랙 + 수구수 보정(득점폭_검토_v0.1)으로 찾아요. 배치도의 1 → 2 → 3쿠션 점선은 반사 근사예요.</p>
   </div>
 
   <div class="card" id="cbCard">
@@ -195,20 +195,28 @@ const shotName=(K,V,T)=>`${K}두께 · ${vName(V)} · 정${T}`;
 function bounce(p,d){let t=1e9,hx=false,hy=false;const c=[[d[0]>0?(8-p[0])/d[0]:d[0]<0?-p[0]/d[0]:1e9,'x'],[d[1]>0?(4-p[1])/d[1]:d[1]<0?-p[1]/d[1]:1e9,'y']];
   for(const[tt,k]of c)if(tt>1e-6&&tt<t-1e-9){t=tt;hx=k==='x';hy=k==='y'}else if(tt>1e-6&&Math.abs(tt-t)<1e-9){if(k==='x')hx=true;else hy=true}
   return{p:[p[0]+d[0]*t,p[1]+d[1]*t],d:[hx?-d[0]:d[0],hy?-d[1]:d[1]]}}
-function track(o,p1,x3){const A=[Math.max(p1,0),0],y2=p1>0.02?4*p1/(p1+x3):0,B=[0,y2],C3=[x3,4];let d=[x3,-(4-y2)];const L=Math.hypot(...d);d=[d[0]/L,d[1]/L];
-  const b4=bounce(C3,d),b5=bounce(b4.p,b4.d);return[o,A,B,C3,b4.p,b5.p]}
 function segD(g,a,b){const vx=b[0]-a[0],vy=b[1]-a[1],L=vx*vx+vy*vy;let t=L?((g[0]-a[0])*vx+(g[1]-a[1])*vy)/L:0;t=Math.max(0,Math.min(1,t));return Math.hypot(g[0]-a[0]-vx*t,g[1]-a[1]-vy*t)}
-function hitD(G,pts){return Math.min(segD(G,pts[2],pts[3]),segD(G,pts[3],pts[4]),segD(G,pts[4],pts[5]))}
-// 2적구 → 목표 (3쿠션 p): 3쿠션 뒤 반사각이 같다고 본 근사
-function autoT(G,P,p1){let best=null;const ok=[];for(let T=0.1;T<=6;T+=0.025){const d=hitD(G,track(P,p1,T));if(!best||d<best.d)best={T,d};if(d<=0.173)ok.push(+T.toFixed(3))}
-  let T=best.T;if(ok.length){const has=x=>ok.some(v=>Math.abs(v-x)<1e-6);let lo=+best.T.toFixed(3),hi=lo;while(has(+(lo-0.025).toFixed(3)))lo=+(lo-0.025).toFixed(3);while(has(+(hi+0.025).toFixed(3)))hi=+(hi+0.025).toFixed(3);T=(lo+hi)/2}
-  return{T:Math.round(T*20)/20,d:best.d,ok:ok.length>0}}
+const lin=(x,xs,ys)=>{let i=0;if(x<=xs[0])i=0;else if(x>=xs[xs.length-1])i=xs.length-2;else while(x>xs[i+1])i++;return ys[i]+(ys[i+1]-ys[i])*(x-xs[i])/(xs[i+1]-xs[i])};
+// 파이브 앤 하프 3 → 4쿠션 트랙 (득점폭_검토_v0.1, 3쿠션 마스터 PDF)
+const POS=[0,1,2,2.9,3.7,4.4,5.0,5.5,6.0,6.5],PC=[0,10,20,30,40,50,60,70,80,90];
+const TC=[-20,-10,0,10,20,30,40,50,60,70,80,90],TS4=[4,5,6,7.2,8,8.8,9.5,10,10.3,10.7,11,11.2];
+const p2C=p=>lin(p,POS,PC);
+const svCorr=sv=>sv>=50?(sv-50)*0.5:-(50-sv)*0.25;
+function four(p,sv){const s=lin(p2C(p)+svCorr(sv),TC,TS4);return s<=8?[s,0]:[8,Math.min(s-8,4)]}
+function startv(px,py,dx,dy){const bx=-dx,by=-dy;const t1=by>0?(4+FR-py)/by:1e9,t2=bx>0?(8+FR-px)/bx:1e9;
+  if(t1<=t2)return Math.min(50,5*(px+bx*t1)+10);const d=Math.max(0,4-(py+by*t2));return d<=2?50+10*d:70+20*(d-2)}
+function track(P,p1,x3,sv){const A=[Math.max(p1,0),0],y2=p1>0.02?4*p1/(p1+x3):0,B=[0,y2],C3=[x3,4],C4=four(x3,sv);
+  let d=[C4[0]-C3[0],C4[1]-C3[1]];const L=Math.hypot(...d)||1;d=[d[0]/L,d[1]/L];if(C4[1]<=0.001)d[1]=-d[1];else d[0]=-d[0];
+  const C5=[C4[0]+d[0]*1.2,C4[1]+d[1]*1.2];return[P,A,B,C3,C4,C5]}
+function autoT(G,sv){let best=null;const ok=[];for(let i=0;i<=630;i++){const p=0.2+i*0.01,d=segD(G,[p,4],four(p,sv));if(!best||d<best.d)best={p,d};if(d<=0.173)ok.push(i)}
+  let T=best.p,lo=null,hi=null;if(ok.length){const bi=Math.round((best.p-0.2)/0.01);let a=bi,b=bi;while(ok.includes(a-1))a--;while(ok.includes(b+1))b++;lo=0.2+a*0.01;hi=0.2+b*0.01;T=(lo+hi)/2}
+  return{T:Math.round(T*20)/20,d:best.d,ok:ok.length>0,lo,hi}}
 // 맞는 순간 수구 (4두께: 1쿠션 쪽 가장자리를 공 반지름 옆으로 겨냥)
 function contact(c,o){let u=[o[0]-c[0],o[1]-c[1]],L=Math.hypot(...u);u=[u[0]/L,u[1]/L];
   for(let i=0;i<3;i++){let n=[-u[1],u[0]];if(n[1]>0)n=[-n[0],-n[1]];const A=[o[0]+n[0]*R,o[1]+n[1]*R];u=[A[0]-c[0],A[1]-c[1]];L=Math.hypot(...u);u=[u[0]/L,u[1]/L]}
   const w=[o[0]-c[0],o[1]-c[1]],pr=w[0]*u[0]+w[1]*u[1],pp=w[0]*w[0]+w[1]*w[1]-pr*pr,t=pr-Math.sqrt(Math.max(0,4*R*R-pp));return[c[0]+u[0]*t,c[1]+u[1]*t]}
 // 실제 수구 라인 (장 차이 2.5p) → 출발 · 1쿠션
-function baseLine(P){const k=2.5/(4+2*FR),x4=P[0]+(4+FR-P[1])*k,x0=P[0]-(P[1]+FR)*k,st=10+5*x4,c1=10*x0;return{x4,x0,st,c1,base:(st-c1)/10,edge:x4>8||x0<0}}
+function baseLine(P){const k=2.5/(4+2*FR),x4=P[0]+(4+FR-P[1])*k,x0=P[0]-(P[1]+FR)*k,st=10+5*x4,c1=10*x0;return{x4,x0,st,c1,base:(st-c1)/10,edge:x4>8||x0<0,sv:startv(P[0],P[1],x0-P[0],-FR-P[1])}}
 function cCalc(m,K,TGp){const L=[];let v=m.bl.base;
   L.push([`기준값 = 출발 − 1쿠션 = ${f1(m.bl.st)} − ${f1(m.bl.c1)}`,fp(v)]);
   if(m.S>0){v-=0.5*m.S;L.push([`수구위치 ${fx(m.S)}: 0.5p × ${m.S} 빼기 (원리2 · 5)`,fp(v)])}
@@ -229,7 +237,7 @@ function compute(){
   const Pc=contact(c,o),bl=baseLine(Pc);
   const m={c,o,E,Sraw,S,P:Pc,bl,wall:o[1]<=1,rev:dx<0,G:P.obj2?Wb(P.obj2):null};
   let TGp=tgMan,auto=null;
-  if(tgAuto){if(!m.G)return{m,need:'2적구'};auto=autoT(m.G,Pc,bl.x0);TGp=auto.T}
+  if(tgAuto){if(!m.G)return{m,need:'2적구'};auto=autoT(m.G,bl.sv);TGp=auto.T}
   const all=LAD.map(K=>cCalc(m,K,TGp));const best=all.find(r=>r.ok)||null;
   if(best&&best.V<-3.5)return{m,TGp,auto,all,best:null};
   return{m,TGp,auto,all,best:(all[0].V<-3.5)?null:best};
@@ -243,7 +251,7 @@ function renderSol(){
   $('tAuto').setAttribute('aria-pressed',tgAuto);drawPlan();
   if(sol.need){B.innerHTML=`<p class="note">2적구를 찍으면 목표가 정해져요. 목표(p)를 직접 넣어도 돼요.</p>`;$('allK').innerHTML='';return}
   const r=sol.best;
-  const tg=sol.auto?`목표 ${fp(sol.TGp)} (2적구${sol.auto.ok?'':` · 가장 가까운 길, ${f1(sol.auto.d)}칸 떨어짐`})`:`목표 ${fp(sol.TGp)} (직접)`;
+  const tg=sol.auto?`목표 ${fp(sol.TGp)} (2적구${sol.auto.ok?` · 득점폭 ${fp(sol.auto.lo)} ~ ${fp(sol.auto.hi)}`:` · 3 → 4쿠션 길이 2적구에서 ${f1(sol.auto.d)}칸 떨어짐, 가장 가까운 값`}, 수구수 ${f1(m.bl.sv)})`:`목표 ${fp(sol.TGp)} (직접)`;
   const head=`<p class="verdict">${tg}${m.wall?' · 벽꿍':''}${m.bl.edge?' · <span class="mid">라인이 코너를 넘어요 (기준값 확인 필요)</span>':''}</p>${m.rev?'<p class="note" style="color:var(--r)">수구가 1적구보다 장이 낮게 읽혀요. 코너 ①이 1쿠션 쪽 코너인지 확인해 주세요.</p>':''}`;
   if(!r){const a=sol.all[0];B.innerHTML=`<div class="shot">못 침</div>${head}<p class="note">${a.V<-3.5?'4두께 하3.5로도 목표보다 길어요.':'1두께까지 내려도 상하가 3.5를 넘어요.'}</p>`;renderAll();return}
   const p1=P1LINE[r.K]!==undefined&&P1LINE[r.K]===r.V?`<p class="note">원리1 같은 3쿠션: 4두께 상3 = 3두께 상2 = 2.5두께 상1 = 2두께 중단 = 1.5두께 하1 (키스 피할 때)</p>`:'';
@@ -272,7 +280,7 @@ function drawPlan(){
   line([m.bl.x4,4],[m.bl.x0,0],'#3de0ff',2.5);
   tag([Math.min(Math.max(m.bl.x4,0.4),7.6),4],'출발 '+f1(m.bl.st),'#3de0ff',-M*0.55);tag([Math.min(Math.max(m.bl.x0,0.4),7.6),0],'1쿠션 '+f1(m.bl.c1),'#3de0ff',M*0.55);
   // 예상 길 (근사)
-  if(sol.TGp!=null&&!sol.need){const pts=track(m.P,m.bl.x0,sol.TGp);g.beginPath();g.setLineDash([7,5]);g.moveTo(...pt(pts[0]));pts.slice(1).forEach(q=>g.lineTo(...pt(q)));g.strokeStyle='#3dffa0';g.lineWidth=2;g.stroke();g.setLineDash([]);
+  if(sol.TGp!=null&&!sol.need){const pts=track(m.P,m.bl.x0,sol.TGp,m.bl.sv);g.beginPath();g.setLineDash([7,5]);g.moveTo(...pt(pts[0]));pts.slice(1).forEach(q=>g.lineTo(...pt(q)));g.strokeStyle='#3dffa0';g.lineWidth=2;g.stroke();g.setLineDash([]);
     const[sx,sy]=pt([sol.TGp,4]);g.save();g.translate(sx,sy);g.fillStyle='#ffd23d';g.strokeStyle='#000';g.lineWidth=1.5;g.beginPath();for(let i=0;i<10;i++){const a=-Math.PI/2+i*Math.PI/5,rr=(i%2?4:10);g.lineTo(Math.cos(a)*rr,Math.sin(a)*rr)}g.closePath();g.fill();g.stroke();g.restore();tag([sol.TGp,4],'목표 '+fp(sol.TGp),'#ffd23d',-M*0.55)}
   // 공
   const ball=(p,col,name)=>{if(!p)return;const[x,y]=pt(p),rr=Math.max(4,R*sc*1.15);g.beginPath();g.arc(x,y,rr,0,7);g.fillStyle=col;g.fill();g.lineWidth=1.5;g.strokeStyle='#000';g.stroke();tag(p,`${name} ${f1(p[0])}·${f1(p[1])}`,col,p[1]>3.3?rr+12:-(rr+12))};
@@ -323,7 +331,7 @@ function draw(){
   if(cal&&sol&&sol.m&&!sol.err){
     const m=sol.m;seg(Im([m.bl.x4,4]),Im([m.bl.x0,0]),'#3de0ff',3);
     label(Im([Math.min(Math.max(m.bl.x4,0.3),7.7),4]),'출발 '+f1(m.bl.st),'#3de0ff');label((q=>[q[0],q[1]+18*px])(Im([Math.min(Math.max(m.bl.x0,0.3),7.7),0])),'1쿠션 '+f1(m.bl.c1),'#3de0ff');
-    if(!sol.need&&sol.TGp!=null){const pts=track(m.P,m.bl.x0,sol.TGp).map(Im);ctx.beginPath();ctx.setLineDash([12*px,7*px]);ctx.moveTo(...pts[0]);pts.slice(1).forEach(q=>ctx.lineTo(...q));ctx.strokeStyle='#3dffa0';ctx.lineWidth=3*px;ctx.stroke();ctx.setLineDash([]);
+    if(!sol.need&&sol.TGp!=null){const pts=track(m.P,m.bl.x0,sol.TGp,m.bl.sv).map(Im);ctx.beginPath();ctx.setLineDash([12*px,7*px]);ctx.moveTo(...pts[0]);pts.slice(1).forEach(q=>ctx.lineTo(...q));ctx.strokeStyle='#3dffa0';ctx.lineWidth=3*px;ctx.stroke();ctx.setLineDash([]);
       const tgP=Im([sol.TGp,4]);ctx.save();ctx.translate(...tgP);ctx.fillStyle='#ffd23d';ctx.strokeStyle='#000';ctx.lineWidth=2*px;ctx.beginPath();for(let i=0;i<10;i++){const a=-Math.PI/2+i*Math.PI/5,rr=(i%2?5:12)*px;ctx.lineTo(Math.cos(a)*rr,Math.sin(a)*rr)}ctx.closePath();ctx.fill();ctx.stroke();ctx.restore();label([tgP[0],tgP[1]-16*px],'목표 '+fp(sol.TGp),'#ffd23d')}
   }
   // 보정 공
