@@ -201,7 +201,8 @@ const lin=(x,xs,ys)=>{let i=0;if(x<=xs[0])i=0;else if(x>=xs[xs.length-1])i=xs.le
 const POS=[0,1,2,2.9,3.7,4.4,5.0,5.5,6.0,6.5],PC=[0,10,20,30,40,50,60,70,80,90];
 const TC=[-20,-10,0,10,20,30,40,50,60,70,80,90],TS4=[4,5,6,7.2,8,8.8,9.5,10,10.3,10.7,11,11.2];
 const p2C=p=>lin(p,POS,PC);
-const svCorr=sv=>sv>=50?(sv-50)*0.5:-(50-sv)*0.25;
+// 수구수 보정 (PDF 8번): 칸(다이아몬드)마다 짧으면 4쿠션 −¼포인트, 길면 +½포인트. 장쿠션 1칸 = 수구수 5, 단쿠션 70까지 1칸 = 10, 그 위 1칸 = 20
+const svCorr=sv=>sv<=50?-0.5*(50-sv):sv<=70?0.5*(sv-50):10+0.25*(sv-70);
 function four(p,sv){const s=lin(p2C(p)+svCorr(sv),TC,TS4);return s<=8?[s,0]:[8,Math.min(s-8,4)]}
 function startv(px,py,dx,dy){const bx=-dx,by=-dy;const t1=by>0?(4+FR-py)/by:1e9,t2=bx>0?(8+FR-px)/bx:1e9;
   if(t1<=t2)return Math.min(50,5*(px+bx*t1)+10);const d=Math.max(0,4-(py+by*t2));return d<=2?50+10*d:70+20*(d-2)}
